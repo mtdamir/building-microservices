@@ -1,38 +1,49 @@
 package main
 
 import (
-	"fmt"
-	"io"
+	"context"
 	"log"
+	"main/handlers"
 	"net/http"
+	"os"
+	"os/signal"
+	"time"
 )
 
 func main() {
-	// reqeusts to the path /goodbye with be handled by this function
-	http.HandleFunc("/goodbye", func(http.ResponseWriter, *http.Request) {
-		log.Println("Goodbye World")
-	})
 
-	// any other request will be handled by this function
-	http.HandleFunc("/", func(rw http.ResponseWriter, r *http.Request) {
-		log.Println("Running Hello Handler")
+	l := log.New(os.Stdout, "product-api", log.LstdFlags)
 
-		// read the body
-		b, err := io.ReadAll(r.Body)
+	hh := handlers.NewHello(l)
+	gh := handlers.NewGoodbye(l)
+
+	sm := http.NewServeMux()
+	sm.Handle("/", hh)
+	sm.Handle("/goodbye", gh)
+
+	s := &http.Server{
+		Addr:         ":8080",
+		Handler:      sm,
+		IdleTimeout:  120 * time.Second,
+		ReadTimeout:  1 * time.Second,
+		WriteTimeout: 1 * time.Second,
+	}
+
+	go func() {
+		err := s.ListenAndServe()
 		if err != nil {
-			log.Println("Error reading body", err)
-
-			http.Error(rw, "Unable to read request body", http.StatusBadRequest)
-			return
+			l.Fatal(err)
 		}
+	}()
 
-		// write the response
-		fmt.Fprintf(rw, "Hello %s", b)
-	})
+	sigChan := make(chan os.Signal)
+	signal.Notify(sigChan, os.Interrupt)
+	signal.Notify(sigChan, os.Kill)
 
-	// Listen for connections on all ip addresses (0.0.0.0)
-	// port 9090
-	log.Println("Starting Server")
-	err := http.ListenAndServe(":9090", nil)
-	log.Fatal(err)
+	sig := <-sigChan
+	l.Println("Recived terminate, graceful shutdown", sig)
+
+	tc, _ := context.WithTimeout(context.Background(), 30*time.Second)
+	s.Shutdown(tc)
+
 }
