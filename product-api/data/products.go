@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"time"
+
+	"github.com/go-playground/validator"
 )
 
 // Product defines the structure for an API product
@@ -24,6 +26,11 @@ func (p *Product) FromJSON(r io.Reader) error {
 	return e.Decode(p)
 }
 
+func (p *Product) Validate() error {
+	validate := validator.New()
+	return validate.Struct(p)
+}
+
 // Products is a collection of Product
 type Products []*Product
 
@@ -31,8 +38,6 @@ type Products []*Product
 // NewEncoder provides better performance than json.Unmarshal as it does not
 // have to buffer the output into an in memory slice of bytes
 // this reduces allocations and the overheads of the service
-//
-// https://golang.org/pkg/encoding/json/#NewEncoder
 func (p *Products) ToJSON(w io.Writer) error {
 	e := json.NewEncoder(w)
 	return e.Encode(p)
